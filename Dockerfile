@@ -1,14 +1,43 @@
-FROM golang:1.21-alpine
+FROM golang:1.24-alpine AS builder
+
+# Install dependencies
+RUN apk add --no-cache git ffmpeg
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files from src directory
+COPY src/go.mod src/go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY src/ ./
+
+# Build the application
+RUN go build -o whatsapp .
+
+# Final stage
+FROM alpine:latest
+
+# Install runtime dependencies
+RUN apk add --no-cache ffmpeg ca-certificates
 
 WORKDIR /app
 
-COPY go.mod ./
-RUN go mod download
+# Copy binary from builder
+COPY --from=builder /app/whatsapp .
 
-COPY *.go ./
+# Copy necessary files
+COPY --from=builder /app/views ./views
+COPY --from=builder /app/statics ./statics
 
-RUN go build -o main .
+# Create storage directory
+RUN mkdir -p /app/storages
 
+# Expose port
 EXPOSE 3000
 
-CMD ["./main"]
+# Run the application in REST mode
+CMD ["./whatsapp", "rest"]
