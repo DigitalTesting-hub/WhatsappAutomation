@@ -7,36 +7,19 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
+// Global variables to track WhatsApp status
 var (
-	upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true // Allow all origins for demo
-		},
-	}
-	clients   = make(map[*websocket.Conn]bool)
-	broadcast = make(chan Message)
+	isWhatsAppConnected bool   = false
+	qrCodeData          string = ""
+	connectionStatus    string = "disconnected"
 )
-
-type Message struct {
-	Type    string      `json:"type"`
-	Content interface{} `json:"content"`
-}
 
 type SendRequest struct {
 	To      string `json:"to"`
 	Message string `json:"message"`
 }
-
-// Global variables to track WhatsApp status
-var (
-	isWhatsAppConnected bool = false
-	qrCodeData         string = ""
-	connectionStatus   string = "disconnected"
-)
 
 func main() {
 	port := os.Getenv("PORT")
@@ -44,17 +27,13 @@ func main() {
 		port = "3000"
 	}
 
-	// Serve static HTML for QR code
+	// Register handlers
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/send", sendHandler)
 	http.HandleFunc("/status", statusHandler)
 	http.HandleFunc("/qr", qrHandler)
 	http.HandleFunc("/connect", connectHandler)
-	http.HandleFunc("/ws", wsHandler)
-
-	// Start WebSocket broadcaster
-	go handleBroadcasts()
 
 	log.Printf("🚀 WhatsApp Server starting on port %s", port)
 	log.Printf("✅ All endpoints ready:")
@@ -64,7 +43,6 @@ func main() {
 	log.Printf("   📊 GET  /status  - Connection status")
 	log.Printf("   📱 GET  /qr      - QR code page")
 	log.Printf("   🔗 GET  /connect - Force reconnect")
-	log.Printf("   🔌 GET  /ws      - WebSocket for real-time updates")
 
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
@@ -136,34 +114,12 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 					<strong>Status:</strong>
 					<div class="code">GET /status</div>
 				</div>
-
-				<div class="endpoint">
-					<strong>WebSocket (Real-time):</strong>
-					<div class="code">GET /ws</div>
-				</div>
 			</div>
 
 			<div style="margin-top: 20px; text-align: center;">
 				<small>Server running on Render.com | Version 2.0</small>
 			</div>
 		</div>
-
-		<script>
-			// WebSocket for real-time updates
-			const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws');
-			
-			ws.onmessage = function(event) {
-				const data = JSON.parse(event.data);
-				if (data.type === 'status_update') {
-					// Reload page to show updated status
-					window.location.reload();
-				}
-			};
-
-			ws.onclose = function() {
-				console.log('WebSocket disconnected');
-			};
-		</script>
 	</body>
 	</html>
 	`
@@ -175,7 +131,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		statusText = "Connected ✓"
 	}
 
-	// Generate simple ASCII QR (in real implementation, use actual QR)
+	// Generate simple ASCII QR
 	if qrCodeData == "" {
 		qrCodeData = generateDemoQR()
 	}
@@ -246,8 +202,7 @@ func sendHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement actual WhatsApp message sending here
-	// For now, simulate successful send
+	// Simulate successful send
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "WhatsApp message sent successfully",
@@ -255,20 +210,9 @@ func sendHandler(w http.ResponseWriter, r *http.Request) {
 			"to":        req.To,
 			"message":   req.Message,
 			"timestamp": time.Now().Format(time.RFC3339),
-			"note":      "Actual WhatsApp integration pending",
+			"note":      "Simulation mode - Real WhatsApp integration ready to add",
 		},
 	})
-
-	// Broadcast the sent message via WebSocket
-	message := Message{
-		Type: "message_sent",
-		Content: map[string]string{
-			"to":      req.To,
-			"message": req.Message,
-			"time":    time.Now().Format("15:04:05"),
-		},
-	}
-	broadcast <- message
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
@@ -285,7 +229,6 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 			"send":    "/send (POST)",
 			"qr":      "/qr",
 			"connect": "/connect",
-			"ws":      "/ws (WebSocket)",
 		},
 	})
 }
@@ -315,16 +258,6 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 		isWhatsAppConnected = true
 		connectionStatus = "connected"
 		log.Printf("✅ WhatsApp connected successfully")
-		
-		// Broadcast connection status
-		message := Message{
-			Type: "status_update",
-			Content: map[string]string{
-				"status": "connected",
-				"time":   time.Now().Format("15:04:05"),
-			},
-		}
-		broadcast <- message
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -334,60 +267,13 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 		"data": map[string]string{
 			"status":    "connecting",
 			"next_step": "Scan QR code when ready",
-			"note":      "This is a simulation. Real QR code generation needed.",
+			"note":      "Simulation mode - Ready for real WhatsApp integration",
 		},
 	})
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	ws, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
-		return
-	}
-	defer ws.Close()
-
-	clients[ws] = true
-
-	// Send current status to new client
-	statusMessage := Message{
-		Type: "status_update",
-		Content: map[string]interface{}{
-			"connected": isWhatsAppConnected,
-			"status":    connectionStatus,
-			"timestamp": time.Now().Format(time.RFC3339),
-		},
-	}
-	ws.WriteJSON(statusMessage)
-
-	for {
-		var msg Message
-		err := ws.ReadJSON(&msg)
-		if err != nil {
-			log.Printf("WebSocket read error: %v", err)
-			delete(clients, ws)
-			break
-		}
-	}
-}
-
-func handleBroadcasts() {
-	for {
-		msg := <-broadcast
-		for client := range clients {
-			err := client.WriteJSON(msg)
-			if err != nil {
-				log.Printf("WebSocket write error: %v", err)
-				client.Close()
-				delete(clients, client)
-			}
-		}
-	}
-}
-
 func generateDemoQR() string {
 	// Simple ASCII QR code for demonstration
-	// In real implementation, use: github.com/skip2/go-qrcode
 	return `
 █████████████████████████████████████
 ████ ▄▄▄▄▄ █▀ █▀▄▄▀▀ ▄▄▄▄▄ █ ▄▄▄▄▄ ████
