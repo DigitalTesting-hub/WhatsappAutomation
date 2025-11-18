@@ -5,4 +5,3 @@ Dockerfile
 .dockerignore
 *.log
 tmp/
-whatsapp.db
