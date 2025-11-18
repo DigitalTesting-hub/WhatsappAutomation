@@ -1,7 +1,7 @@
 FROM golang:1.24-alpine AS builder
 
-# Install dependencies
-RUN apk add --no-cache git ffmpeg
+# Install build dependencies including gcc for CGO
+RUN apk add --no-cache git ffmpeg gcc musl-dev
 
 # Set working directory
 WORKDIR /app
@@ -15,7 +15,8 @@ RUN go mod download
 # Copy source code
 COPY src/ ./
 
-# Build the application
+# Build the application with CGO enabled
+ENV CGO_ENABLED=1
 RUN go build -o whatsapp .
 
 # Final stage
@@ -29,9 +30,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/whatsapp .
 
-# Copy necessary files
-COPY --from=builder /app/views ./views
-COPY --from=builder /app/statics ./statics
+# Copy necessary files (if they exist)
+COPY --from=builder /app/views ./views 2>/dev/null || true
+COPY --from=builder /app/statics ./statics 2>/dev/null || true
 
 # Create storage directory
 RUN mkdir -p /app/storages
