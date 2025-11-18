@@ -11,26 +11,28 @@ RUN apk add --no-cache \
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files from src directory
-COPY src/go.mod src/go.sum ./
-
-# Download dependencies with CGO enabled
-ENV CGO_ENABLED=1
-ENV GOOS=linux
-RUN go mod download
-
-# Copy source code
+# Copy entire src directory first
 COPY src/ ./
 
-# Verify CGO is enabled and build
-RUN echo "Building with CGO_ENABLED=1..." && \
-    go env && \
-    go build -v -ldflags="-w -s" -o whatsapp .
+# Verify go.mod exists and download dependencies
+RUN if [ -f go.mod ]; then \
+        echo "go.mod found, downloading dependencies..."; \
+        CGO_ENABLED=1 go mod download; \
+    else \
+        echo "ERROR: go.mod not found!"; \
+        ls -la; \
+        exit 1; \
+    fi
+
+# Build with CGO enabled
+ENV CGO_ENABLED=1
+ENV GOOS=linux
+RUN go build -v -ldflags="-w -s" -o whatsapp .
 
 # Final stage
 FROM alpine:latest
 
-# Install runtime dependencies including sqlite libs
+# Install runtime dependencies
 RUN apk add --no-cache \
     ffmpeg \
     ca-certificates \
@@ -42,14 +44,10 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/whatsapp .
 
-# Copy necessary files (gracefully handle if they don't exist)
-COPY --from=builder /app/views ./views 2>/dev/null || true
-COPY --from=builder /app/statics ./statics 2>/dev/null || true
-
-# Create storage directory with proper permissions
+# Create storage directory
 RUN mkdir -p /app/storages && chmod 777 /app/storages
 
-# Expose port (Render uses PORT environment variable)
+# Expose port
 EXPOSE 3000
 
 # Run the application in REST mode
