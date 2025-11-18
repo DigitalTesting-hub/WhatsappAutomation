@@ -216,16 +216,11 @@ Content-Type: application/json<br>
 	}
 
 	// Generate QR code display
-	qrDisplay := ""
-	if qrCodeImageURL != "" {
-		qrDisplay = fmt.Sprintf(`<img src="%s" alt="QR Code" class="qr-image"><br>`, qrCodeImageURL)
-	} else {
-		qrDisplay = `<p>No QR code generated yet. Click "Generate New QR Code" to start.</p>`
-	}
-
-	fmt.Fprintf(w, html, statusClass, statusText, qrDisplay, isWhatsAppConnected)
-}
-
+	qrDisplay := `<p>🔄 QR functionality ready - Enable in next update</p>
+             <div style="background:#f8f9fa; padding:20px; border-radius:5px;">
+                 <p><strong>Next Step:</strong> Add QR code library dependency</p>
+                 <p>For now, use the simulation mode below.</p>
+             </div>`
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -347,9 +342,18 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	
 
 	log.Printf("✅ New QR code generated for WhatsApp connection")
-
+	// Auto-connect after 5 seconds for simulation
+	go func() {
+    	time.Sleep(5 * time.Second)
+    	if connectionStatus == "waiting_for_scan" {
+        	isWhatsAppConnected = true
+        	connectionStatus = "connected"
+        	log.Printf("✅ WhatsApp connected successfully (simulation)")
+    	}
+	}()
 	// Simulate connection process (in real implementation, this would wait for WhatsApp to connect)
 	go func() {
 		time.Sleep(10 * time.Second) // Give user time to scan
@@ -410,26 +414,12 @@ func generateQRAPIHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func generateNewQRCode() error {
-	// Generate unique session ID for this connection attempt
-	whatsappSession = fmt.Sprintf("wa_session_%d", time.Now().Unix())
-	
-	// QR code content that would be scanned by WhatsApp
-	// In real implementation, this would be provided by the WhatsApp web library
-	qrContent := fmt.Sprintf("WhatsAppSession-%s-%d", whatsappSession, time.Now().Unix())
-	
-	// Generate QR code as PNG
-	filename := fmt.Sprintf("qrcodes/%s.png", whatsappSession)
-	err := qrcode.WriteFile(qrContent, qrcode.Medium, 256, filename)
-	if err != nil {
-		return err
-	}
-	
-	// Set the QR code URL for the web interface
-	qrCodeImageURL = "/qrcodes/" + whatsappSession + ".png"
-	connectionStatus = "waiting_for_scan"
-	
-	log.Printf("📱 Generated QR code: %s", qrContent)
-	return nil
+    whatsappSession = fmt.Sprintf("wa_session_%d", time.Now().Unix())
+    // For now, use a placeholder - we'll add real QR later
+    qrCodeImageURL = "" // Clear previous QR
+    connectionStatus = "waiting_for_scan"
+    log.Printf("✅ QR code generation ready - external dependency needed")
+    return nil
 }
 
 func generateMessageID() string {
