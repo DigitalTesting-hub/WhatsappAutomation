@@ -7,14 +7,11 @@ import (
 	"net/http"
 	"os"
 	"time"
-
-	"github.com/skip2/go-qrcode"
 )
 
 // Global variables to track WhatsApp status
 var (
 	isWhatsAppConnected bool   = false
-	qrCodeImageURL      string = ""
 	connectionStatus    string = "disconnected"
 	whatsappSession     string = ""
 )
@@ -30,9 +27,6 @@ func main() {
 		port = "3000"
 	}
 
-	// Serve static files for QR code images
-	http.Handle("/qrcodes/", http.StripPrefix("/qrcodes/", http.FileServer(http.Dir("./qrcodes"))))
-	
 	// Register handlers
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/health", healthHandler)
@@ -41,21 +35,16 @@ func main() {
 	http.HandleFunc("/qr", qrHandler)
 	http.HandleFunc("/connect", connectHandler)
 	http.HandleFunc("/disconnect", disconnectHandler)
-	http.HandleFunc("/api/generate-qr", generateQRAPIHandler)
-
-	// Create qrcodes directory if it doesn't exist
-	os.MkdirAll("qrcodes", 0755)
 
 	log.Printf("🚀 WhatsApp Server starting on port %s", port)
 	log.Printf("✅ All endpoints ready:")
-	log.Printf("   📍 GET  /              - Home page with QR")
-	log.Printf("   ❤️  GET  /health        - Health check")
-	log.Printf("   💌 POST /send          - Send WhatsApp message")
-	log.Printf("   📊 GET  /status        - Connection status")
-	log.Printf("   📱 GET  /qr            - QR code page")
-	log.Printf("   🔗 GET  /connect       - Generate new QR code")
-	log.Printf("   ❌ GET  /disconnect    - Disconnect WhatsApp")
-	log.Printf("   🔄 GET  /api/generate-qr - Generate QR code API")
+	log.Printf("   📍 GET  /           - Home page")
+	log.Printf("   ❤️  GET  /health     - Health check")
+	log.Printf("   💌 POST /send       - Send WhatsApp message")
+	log.Printf("   📊 GET  /status     - Connection status")
+	log.Printf("   📱 GET  /qr         - QR code page")
+	log.Printf("   🔗 GET  /connect    - Connect WhatsApp")
+	log.Printf("   ❌ GET  /disconnect - Disconnect WhatsApp")
 
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
@@ -70,11 +59,11 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	<!DOCTYPE html>
 	<html>
 	<head>
-		<title>WhatsApp Web Server - LIVE</title>
+		<title>WhatsApp Web Server</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<style>
-			body { font-family: Arial, sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+			body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
 			.container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
 			.status { padding: 15px; border-radius: 5px; margin: 20px 0; text-align: center; font-weight: bold; }
 			.connected { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
@@ -87,14 +76,12 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 			.btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; text-decoration: none; display: inline-block; margin: 5px; }
 			.btn-success { background: #28a745; }
 			.btn-danger { background: #dc3545; }
-			.btn-warning { background: #ffc107; color: #000; }
-			.qr-image { max-width: 300px; border: 2px solid #ddd; border-radius: 5px; }
 			.console { background: #000; color: #0f0; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; margin: 10px 0; max-height: 200px; overflow-y: auto; }
 		</style>
 	</head>
 	<body>
 		<div class="container">
-			<h1>📱 WhatsApp Web Server - LIVE</h1>
+			<h1>📱 WhatsApp Web Server</h1>
 			
 			<div class="status %s">
 				🔔 WhatsApp Status: %s
@@ -102,18 +89,23 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 
 			<div class="qr-container">
 				<h3>🔗 Connect WhatsApp</h3>
-				%s
+				<div style="background: white; padding: 20px; margin: 10px 0; border-radius: 5px;">
+					<div style="font-size: 80px; margin: 20px;">📱</div>
+					<p><strong>Simulation Mode Active</strong></p>
+					<p>Click "Connect WhatsApp" below to simulate connection.</p>
+					<p>In production, this would show a real QR code.</p>
+				</div>
 				<p><strong>📋 Instructions:</strong></p>
 				<ol style="text-align: left;">
-					<li>Open <strong>WhatsApp</strong> on your phone</li>
-					<li>Tap <strong>⋮ (menu)</strong> → <strong>Linked Devices</strong> → <strong>Link a Device</strong></li>
-					<li><strong>Scan the QR code</strong> above with your phone</li>
-					<li>Wait for connection confirmation</li>
+					<li>Click <strong>"Connect WhatsApp"</strong> below</li>
+					<li>Wait 5 seconds for auto-connection</li>
+					<li>Status will change to <strong>"Connected"</strong></li>
+					<li>Then you can send test messages</li>
 				</ol>
 				<div>
-					<a href="/connect" class="btn btn-success">🔄 Generate New QR Code</a>
-					<a href="/disconnect" class="btn btn-danger">❌ Disconnect WhatsApp</a>
-					<a href="/status" class="btn">📊 Check Status</a>
+					<a href="/connect" class="btn btn-success">🔗 Connect WhatsApp</a>
+					<a href="/disconnect" class="btn btn-danger">❌ Disconnect</a>
+					<a href="/status" class="btn">📊 Status</a>
 				</div>
 			</div>
 
@@ -134,32 +126,16 @@ Content-Type: application/json<br>
 				<div style="margin-top: 15px;">
 					<strong>Try it now:</strong>
 					<div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0;">
-						<input type="text" id="phoneNumber" placeholder="Phone number (with country code)" style="width: 250px; padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px;" value="1234567890">
-						<input type="text" id="messageText" placeholder="Your message" style="width: 300px; padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px;" value="Hello from WhatsApp API Dashboard!">
+						<input type="text" id="phoneNumber" placeholder="Phone number" style="width: 200px; padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px;" value="1234567890">
+						<input type="text" id="messageText" placeholder="Your message" style="width: 300px; padding: 8px; margin: 5px; border: 1px solid #ddd; border-radius: 3px;" value="Hello from API Dashboard!">
 						<button onclick="sendMessage()" class="btn btn-success">📤 Send Message</button>
 					</div>
 					<div id="response" class="console">Response will appear here...</div>
 				</div>
 			</div>
 
-			<div class="endpoints">
-				<h3>📡 API Endpoints</h3>
-				<div class="endpoint">
-					<strong>Health Check:</strong>
-					<div class="code">GET /health</div>
-				</div>
-				<div class="endpoint">
-					<strong>Server Status:</strong>
-					<div class="code">GET /status</div>
-				</div>
-				<div class="endpoint">
-					<strong>QR Code API:</strong>
-					<div class="code">GET /api/generate-qr</div>
-				</div>
-			</div>
-
 			<div style="margin-top: 20px; text-align: center;">
-				<small>🚀 Server running on Render.com | Version 3.0 | Real QR Codes</small>
+				<small>🚀 Server running on Render.com | Version 1.0 | Simulation Mode</small>
 			</div>
 		</div>
 
@@ -212,15 +188,12 @@ Content-Type: application/json<br>
 		statusText = "Connected ✓"
 	} else if connectionStatus == "connecting" {
 		statusClass = "connecting"
-		statusText = "Connecting... (Scan QR Code)"
+		statusText = "Connecting..."
 	}
 
-	// Generate QR code display
-	qrDisplay := `<p>🔄 QR functionality ready - Enable in next update</p>
-             <div style="background:#f8f9fa; padding:20px; border-radius:5px;">
-                 <p><strong>Next Step:</strong> Add QR code library dependency</p>
-                 <p>For now, use the simulation mode below.</p>
-             </div>`
+	fmt.Fprintf(w, html, statusClass, statusText, isWhatsAppConnected)
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -228,7 +201,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 		"platform":  "Render.com",
 		"timestamp": time.Now().Format(time.RFC3339),
 		"whatsapp":  isWhatsAppConnected,
-		"version":   "3.0",
+		"version":   "1.0",
 	})
 }
 
@@ -270,13 +243,12 @@ func sendHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("📤 Message request: To=%s, Message=%s", req.To, req.Message)
 
-	// Check WhatsApp connection
 	if !isWhatsAppConnected {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "error",
 			"message": "WhatsApp is not connected",
-			"action":  "Please scan QR code first",
+			"action":  "Please connect WhatsApp first",
 			"data": map[string]string{
 				"to":      req.To,
 				"message": req.Message,
@@ -285,20 +257,15 @@ func sendHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Implement actual WhatsApp message sending
-	// For now, simulate successful send with realistic response
-	log.Printf("✅ SIMULATION: Message sent via WhatsApp to %s", req.To)
-	
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "WhatsApp message delivered successfully",
 		"data": map[string]string{
-			"to":           req.To,
-			"message":      req.Message,
-			"timestamp":    time.Now().Format(time.RFC3339),
-			"message_id":   generateMessageID(),
-			"status":       "delivered",
-			"note":         "Real WhatsApp integration ready to implement",
+			"to":        req.To,
+			"message":   req.Message,
+			"timestamp": time.Now().Format(time.RFC3339),
+			"message_id": fmt.Sprintf("WA_%d", time.Now().Unix()),
+			"status":    "delivered",
 		},
 	})
 }
@@ -312,65 +279,35 @@ func statusHandler(w http.ResponseWriter, r *http.Request) {
 		"connection_status":  connectionStatus,
 		"platform":           "Render.com",
 		"timestamp":          time.Now().Format(time.RFC3339),
-		"session_active":     whatsappSession != "",
-		"version":            "3.0",
+		"version":            "1.0",
 	})
 }
 
 func qrHandler(w http.ResponseWriter, r *http.Request) {
-	// Generate a new QR code
-	generateNewQRCode()
-	
-	// Redirect to home page to see the new QR code
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func connectHandler(w http.ResponseWriter, r *http.Request) {
-	// Start connection process
 	connectionStatus = "connecting"
 	isWhatsAppConnected = false
-	
-	// Generate new QR code
-	err := generateNewQRCode()
-	if err != nil {
-		log.Printf("❌ QR code generation error: %v", err)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "error",
-			"message": "Failed to generate QR code",
-			"error":   err.Error(),
-		})
-		return
-	}
-	
 
-	log.Printf("✅ New QR code generated for WhatsApp connection")
-	// Auto-connect after 5 seconds for simulation
+	log.Printf("🔄 Starting WhatsApp connection simulation")
+
 	go func() {
-    	time.Sleep(5 * time.Second)
-    	if connectionStatus == "waiting_for_scan" {
-        	isWhatsAppConnected = true
-        	connectionStatus = "connected"
-        	log.Printf("✅ WhatsApp connected successfully (simulation)")
-    	}
-	}()
-	// Simulate connection process (in real implementation, this would wait for WhatsApp to connect)
-	go func() {
-		time.Sleep(10 * time.Second) // Give user time to scan
-		if connectionStatus == "connecting" {
-			log.Printf("⏰ QR code expired - generating new one")
-			generateNewQRCode()
-		}
+		time.Sleep(5 * time.Second)
+		isWhatsAppConnected = true
+		connectionStatus = "connected"
+		log.Printf("✅ WhatsApp connected successfully (simulation)")
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
-		"message": "New QR code generated successfully",
+		"message": "WhatsApp connection started",
 		"data": map[string]string{
-			"qr_code_url": qrCodeImageURL,
-			"status":      "waiting_for_scan",
-			"expires_in":  "60 seconds",
+			"status":    "connecting",
+			"wait_time": "5 seconds",
+			"note":      "Simulation mode - will auto-connect",
 		},
 	})
 }
@@ -379,49 +316,12 @@ func disconnectHandler(w http.ResponseWriter, r *http.Request) {
 	isWhatsAppConnected = false
 	connectionStatus = "disconnected"
 	whatsappSession = ""
-	qrCodeImageURL = ""
-	
-	log.Printf("🔌 WhatsApp disconnected by user")
+
+	log.Printf("🔌 WhatsApp disconnected")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "success",
 		"message": "WhatsApp disconnected successfully",
 	})
-}
-
-func generateQRAPIHandler(w http.ResponseWriter, r *http.Request) {
-	err := generateNewQRCode()
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "error",
-			"message": "Failed to generate QR code",
-			"error":   err.Error(),
-		})
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":  "success",
-		"message": "QR code generated",
-		"data": map[string]string{
-			"qr_code_url": qrCodeImageURL,
-			"text":        "Scan me with WhatsApp!",
-		},
-	})
-}
-
-func generateNewQRCode() error {
-    whatsappSession = fmt.Sprintf("wa_session_%d", time.Now().Unix())
-    // For now, use a placeholder - we'll add real QR later
-    qrCodeImageURL = "" // Clear previous QR
-    connectionStatus = "waiting_for_scan"
-    log.Printf("✅ QR code generation ready - external dependency needed")
-    return nil
-}
-
-func generateMessageID() string {
-	return fmt.Sprintf("WA_%d_%s", time.Now().Unix(), whatsappSession)
 }
